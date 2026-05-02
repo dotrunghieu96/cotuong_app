@@ -13,8 +13,7 @@ const PIECE_TEXT = {
 
 const STRINGS = {
   en: {
-    title: "Cờ Tướng",
-    subtitle: "Chinese chess",
+    title: "Chinese Chess",
     red_to_move: "Red to move",
     black_to_move: "Black to move",
     ai_thinking: "AI thinking…",
@@ -36,7 +35,6 @@ const STRINGS = {
   },
   vi: {
     title: "Cờ Tướng",
-    subtitle: "Cờ tướng (gốc Trung Hoa)",
     red_to_move: "Đỏ đi",
     black_to_move: "Đen đi",
     ai_thinking: "Máy đang nghĩ…",

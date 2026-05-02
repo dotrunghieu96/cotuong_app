@@ -67,17 +67,8 @@ html, body {
 
 .side h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 30px;
   color: #f1d9a3;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.side h1 .sub {
-  font-size: 13px;
-  color: #9aa0a6;
-  font-weight: normal;
 }
 
 .lang-switch {
