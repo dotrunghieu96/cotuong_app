@@ -1,0 +1,276 @@
+:root {
+  --board-bg: #f1d9a3;
+  --board-line: #5a3a1a;
+  --board-edge: #3a2410;
+  --red: #c83232;
+  --black: #1f1f1f;
+  --highlight: #2d8f4e;
+  --selected: #2a6dc7;
+  --last-move: #d8a01c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #15181c;
+  color: #e8e8e8;
+  font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue",
+    "Noto Sans CJK SC", "Noto Sans CJK TC", "PingFang SC", "Microsoft YaHei",
+    Arial, sans-serif;
+  min-height: 100vh;
+}
+
+.layout {
+  display: flex;
+  gap: 32px;
+  padding: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.board-wrap {
+  background: var(--board-bg);
+  border: 4px solid var(--board-edge);
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  padding: 0;
+}
+
+#board {
+  display: block;
+  width: min(90vw, 520px);
+  height: auto;
+  max-height: 90vh;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Side panel */
+.side {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.side h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #f1d9a3;
+}
+
+.side h1 .sub {
+  font-size: 14px;
+  color: #9aa0a6;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.status {
+  background: #20242b;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 15px;
+  border: 1px solid #2c333d;
+}
+
+.turn-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 2px #2c333d;
+}
+
+.dot.black {
+  background: var(--black);
+  box-shadow: 0 0 0 2px #6b7280;
+}
+
+.check-line {
+  margin-top: 8px;
+  color: #f6c23e;
+  font-weight: 600;
+}
+
+.result-line {
+  margin-top: 8px;
+  font-weight: 700;
+  color: #46d680;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+}
+
+.controls button,
+.ai button {
+  flex: 1;
+  background: #2c333d;
+  color: #e8e8e8;
+  border: 1px solid #3a4250;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.controls button:hover,
+.ai button:hover {
+  background: #3a4250;
+}
+
+.controls button:active,
+.ai button:active {
+  transform: translateY(1px);
+}
+
+.ai {
+  background: #20242b;
+  border: 1px solid #2c333d;
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai legend {
+  padding: 0 4px;
+  color: #9aa0a6;
+  font-size: 13px;
+}
+
+.ai label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.depth-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.depth-row input[type="range"] {
+  flex: 1;
+}
+
+.ai button {
+  margin-top: 4px;
+}
+
+.footer-help {
+  font-size: 12px;
+  color: #9aa0a6;
+  line-height: 1.5;
+}
+
+/* SVG board styling */
+.grid-line {
+  stroke: var(--board-line);
+  stroke-width: 1.4;
+  fill: none;
+}
+
+.edge-line {
+  stroke: var(--board-edge);
+  stroke-width: 2.4;
+  fill: none;
+}
+
+.river-text {
+  fill: var(--board-edge);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 8px;
+  opacity: 0.5;
+}
+
+.point-marker {
+  stroke: var(--board-line);
+  stroke-width: 1.2;
+  fill: none;
+}
+
+.click-target {
+  fill: transparent;
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.move-dot {
+  fill: var(--highlight);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.capture-ring {
+  fill: none;
+  stroke: var(--highlight);
+  stroke-width: 3;
+  opacity: 0.85;
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.last-move-dot {
+  fill: var(--last-move);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.piece-bg {
+  fill: #f4e1b6;
+  stroke: var(--board-edge);
+  stroke-width: 1.5;
+}
+
+.piece-bg.selected {
+  stroke: var(--selected);
+  stroke-width: 3;
+}
+
+.piece-text {
+  font-family: "Noto Serif CJK SC", "Noto Serif CJK TC", "Songti SC",
+    "STSong", "PMingLiU", "Microsoft YaHei", serif;
+  font-size: 30px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  user-select: none;
+  pointer-events: none;
+}
+
+.piece-text.red {
+  fill: var(--red);
+}
+
+.piece-text.black {
+  fill: var(--black);
+}
+
+.piece-group {
+  cursor: pointer;
+}
+
+.piece-group.disabled {
+  cursor: default;
+}

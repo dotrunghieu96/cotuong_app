@@ -1,0 +1,11 @@
+# Rust build output
+engine/target/
+
+# Generated wasm-bindgen bindings (run ./build.sh to regenerate)
+web/pkg/
+engine/pkg-node/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*.swo

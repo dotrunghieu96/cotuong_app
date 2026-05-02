@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cờ Tướng</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <div class="board-wrap">
+        <svg id="board" viewBox="0 0 520 576" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+
+      <aside class="side">
+        <h1>Cờ Tướng <span class="sub">Vietnamese chess</span></h1>
+
+        <div class="status" id="status">
+          <div class="turn-line">
+            <span class="dot" id="turn-dot"></span>
+            <span id="turn-text">Red to move</span>
+          </div>
+          <div class="check-line" id="check-line" hidden>Check!</div>
+          <div class="result-line" id="result-line" hidden></div>
+        </div>
+
+        <div class="controls">
+          <button id="new-game">New game</button>
+          <button id="undo">Undo</button>
+        </div>
+
+        <fieldset class="ai">
+          <legend>Opponent</legend>
+          <label><input type="radio" name="mode" value="hh" /> Human vs Human</label>
+          <label><input type="radio" name="mode" value="ai-black" checked /> AI plays Black</label>
+          <label><input type="radio" name="mode" value="ai-red" /> AI plays Red</label>
+
+          <div class="depth-row">
+            <label for="depth">AI depth</label>
+            <input type="range" id="depth" min="1" max="5" value="3" />
+            <span id="depth-val">3</span>
+          </div>
+          <button id="ai-now">AI move now</button>
+        </fieldset>
+
+        <div class="footer-help">
+          Click a piece, then click a highlighted square to move.
+          Red moves first. The flying-general rule, blocked horse legs,
+          cannon-screen captures and post-river soldiers are all enforced.
+        </div>
+      </aside>
+    </div>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
