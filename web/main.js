@@ -11,6 +11,69 @@ const PIECE_TEXT = {
   bK: "將", bA: "士", bE: "象", bH: "馬", bR: "車", bC: "砲", bP: "卒",
 };
 
+const STRINGS = {
+  en: {
+    title: "Cờ Tướng",
+    subtitle: "Chinese chess",
+    red_to_move: "Red to move",
+    black_to_move: "Black to move",
+    ai_thinking: "AI thinking…",
+    check: "Check!",
+    red_wins: "Red wins by checkmate.",
+    black_wins: "Black wins by checkmate.",
+    new_game: "New game",
+    undo: "Undo",
+    opponent: "Opponent",
+    mode_hh: "Human vs Human",
+    mode_ai_black: "AI plays Black",
+    mode_ai_red: "AI plays Red",
+    ai_depth: "AI depth",
+    ai_now: "AI move now",
+    help:
+      "Click a piece, then click a highlighted square to move. Red moves first. " +
+      "The flying-general rule, blocked horse legs, cannon-screen captures and " +
+      "post-river soldiers are all enforced.",
+  },
+  vi: {
+    title: "Cờ Tướng",
+    subtitle: "Cờ tướng (gốc Trung Hoa)",
+    red_to_move: "Đỏ đi",
+    black_to_move: "Đen đi",
+    ai_thinking: "Máy đang nghĩ…",
+    check: "Chiếu!",
+    red_wins: "Đỏ thắng (chiếu hết).",
+    black_wins: "Đen thắng (chiếu hết).",
+    new_game: "Ván mới",
+    undo: "Hoàn lại",
+    opponent: "Đối thủ",
+    mode_hh: "Người đấu Người",
+    mode_ai_black: "Máy cầm Đen",
+    mode_ai_red: "Máy cầm Đỏ",
+    ai_depth: "Độ sâu của máy",
+    ai_now: "Máy đi ngay",
+    help:
+      "Chọn một quân, rồi bấm vào ô được tô sáng để di chuyển. Đỏ đi trước. " +
+      "Luật tướng đối mặt, cản chân ngựa, pháo cần ngòi và lính qua sông đều " +
+      "được áp dụng.",
+  },
+};
+
+const LANG_STORAGE_KEY = "cotuong.lang";
+
+function detectInitialLang() {
+  try {
+    const saved = localStorage.getItem(LANG_STORAGE_KEY);
+    if (saved && STRINGS[saved]) return saved;
+  } catch (_) { /* ignore */ }
+  const nav = (navigator.language || "en").toLowerCase();
+  return nav.startsWith("vi") ? "vi" : "en";
+}
+
+let lang = detectInitialLang();
+function t(key) {
+  return (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.en[key] || key;
+}
+
 let game = null;
 let selectedSquare = null;
 let legalDestForSel = [];
@@ -205,7 +268,7 @@ function rerenderDynamic() {
 
   // Status
   const turn = game.turn();
-  $turnText.textContent = turn === 0 ? "Red to move" : "Black to move";
+  $turnText.textContent = turn === 0 ? t("red_to_move") : t("black_to_move");
   $turnDot.classList.toggle("black", turn === 1);
   $checkLine.hidden = !checkOn;
 
@@ -215,7 +278,7 @@ function rerenderDynamic() {
   } else {
     $resultLine.hidden = false;
     $resultLine.textContent =
-      status === "red_wins" ? "Red wins by checkmate." : "Black wins by checkmate.";
+      status === "red_wins" ? t("red_wins") : t("black_wins");
   }
 }
 
@@ -289,7 +352,7 @@ function runAI() {
   if (aiThinking) return;
   if (game.status() !== "playing") return;
   aiThinking = true;
-  $turnText.textContent = "AI thinking…";
+  $turnText.textContent = t("ai_thinking");
   // Yield so the "thinking" message paints before search blocks the thread.
   setTimeout(() => {
     try {
@@ -340,7 +403,30 @@ $board.addEventListener("click", (e) => {
   }
 });
 
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = t("title");
+  for (const el of document.querySelectorAll("[data-i18n]")) {
+    el.textContent = t(el.dataset.i18n);
+  }
+  for (const btn of document.querySelectorAll("#lang-switch button")) {
+    btn.classList.toggle("active", btn.dataset.lang === lang);
+  }
+  if (game) rerenderDynamic();
+}
+
+document.querySelectorAll("#lang-switch button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    lang = btn.dataset.lang;
+    try {
+      localStorage.setItem(LANG_STORAGE_KEY, lang);
+    } catch (_) { /* ignore */ }
+    applyLang();
+  });
+});
+
 (async function start() {
+  applyLang();
   await init();
   game = new Game();
   buildStaticBoard();

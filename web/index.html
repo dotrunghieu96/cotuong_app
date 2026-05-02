@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cờ Tướng</title>
+    <title data-i18n="title">Cờ Tướng</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -13,37 +13,46 @@
       </div>
 
       <aside class="side">
-        <h1>Cờ Tướng <span class="sub">Vietnamese chess</span></h1>
+        <header class="side-header">
+          <h1>
+            <span data-i18n="title">Cờ Tướng</span>
+            <span class="sub" data-i18n="subtitle">Chinese chess</span>
+          </h1>
+          <div class="lang-switch" id="lang-switch">
+            <button type="button" data-lang="en">EN</button>
+            <button type="button" data-lang="vi">VI</button>
+          </div>
+        </header>
 
         <div class="status" id="status">
           <div class="turn-line">
             <span class="dot" id="turn-dot"></span>
             <span id="turn-text">Red to move</span>
           </div>
-          <div class="check-line" id="check-line" hidden>Check!</div>
+          <div class="check-line" id="check-line" hidden data-i18n="check">Check!</div>
           <div class="result-line" id="result-line" hidden></div>
         </div>
 
         <div class="controls">
-          <button id="new-game">New game</button>
-          <button id="undo">Undo</button>
+          <button id="new-game" data-i18n="new_game">New game</button>
+          <button id="undo" data-i18n="undo">Undo</button>
         </div>
 
         <fieldset class="ai">
-          <legend>Opponent</legend>
-          <label><input type="radio" name="mode" value="hh" /> Human vs Human</label>
-          <label><input type="radio" name="mode" value="ai-black" checked /> AI plays Black</label>
-          <label><input type="radio" name="mode" value="ai-red" /> AI plays Red</label>
+          <legend data-i18n="opponent">Opponent</legend>
+          <label><input type="radio" name="mode" value="hh" /> <span data-i18n="mode_hh">Human vs Human</span></label>
+          <label><input type="radio" name="mode" value="ai-black" checked /> <span data-i18n="mode_ai_black">AI plays Black</span></label>
+          <label><input type="radio" name="mode" value="ai-red" /> <span data-i18n="mode_ai_red">AI plays Red</span></label>
 
           <div class="depth-row">
-            <label for="depth">AI depth</label>
+            <label for="depth" data-i18n="ai_depth">AI depth</label>
             <input type="range" id="depth" min="1" max="5" value="3" />
             <span id="depth-val">3</span>
           </div>
-          <button id="ai-now">AI move now</button>
+          <button id="ai-now" data-i18n="ai_now">AI move now</button>
         </fieldset>
 
-        <div class="footer-help">
+        <div class="footer-help" data-i18n="help">
           Click a piece, then click a highlighted square to move.
           Red moves first. The flying-general rule, blocked horse legs,
           cannon-screen captures and post-river soldiers are all enforced.

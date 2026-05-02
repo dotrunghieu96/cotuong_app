@@ -1,8 +1,10 @@
 # Cờ Tướng
 
-Vietnamese / Chinese chess as a Rust engine compiled to WebAssembly, with a
-vanilla-JS SVG frontend. The engine enforces the full ruleset; the browser
-handles input, rendering, and a built-in AI opponent.
+Chinese chess (called *cờ tướng* in Vietnamese) as a Rust engine compiled to
+WebAssembly, with a vanilla-JS SVG frontend. The engine enforces the full
+ruleset; the browser handles input, rendering, and a built-in AI opponent.
+UI is bilingual: English and Vietnamese, switchable in the side panel and
+remembered across reloads.
 
 ## What it does
 
