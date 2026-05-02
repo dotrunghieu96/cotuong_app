@@ -745,6 +745,91 @@ input[type="range"]::-moz-range-thumb {
 }
 .online-msg.empty { display: none; }
 
+/* Room scoreboard — name + win count per player. */
+.scoreboard-panel { gap: 6px; }
+.scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scoreboard .score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+}
+.scoreboard .score-name {
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+.scoreboard .score-wins {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+
+.rematch-hint { padding: 0 4px; }
+
+/* History list — clickable rows. */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  text-decoration: none;
+  color: inherit;
+  transition: background 120ms, border-color 120ms;
+}
+.history-row:hover {
+  background: hsl(var(--accent));
+  border-color: hsl(var(--ring));
+}
+.history-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.history-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.history-room code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  padding: 2px 8px;
+  border-radius: calc(var(--radius) - 4px);
+  color: hsl(var(--primary));
+}
+.history-players {
+  font-size: 14px;
+  color: hsl(var(--foreground));
+}
+.history-result {
+  font-size: 13px;
+  font-weight: 500;
+}
+
 /* Move list panel — scoresheet-style two-column layout. */
 .move-panel { gap: 8px; }
 .move-list {
@@ -770,6 +855,8 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 3px;
   white-space: nowrap;
 }
+.move-list .move-cell[data-ply] { cursor: pointer; }
+.move-list .move-cell[data-ply]:hover { background: hsl(var(--accent) / 0.6); }
 .move-list .move-cell.current {
   background: hsl(var(--accent));
   color: hsl(var(--accent-foreground));

@@ -1,4 +1,6 @@
 // Read-only HTTP endpoints for browsing finished games and replaying moves.
+// All routes require an authenticated user, and a caller can only see games
+// they participated in (red or black).
 
 use axum::{
     extract::{Path, Query, State},
@@ -9,6 +11,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::auth::session::CurrentUser;
 use crate::db::{GameRecord, ListGamesQuery, MoveRecord};
 use crate::state::AppState;
 
@@ -34,22 +37,26 @@ pub struct GameDetail {
 
 pub async fn list_games(
     State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
     Query(p): Query<ListParams>,
 ) -> Result<Json<ListResp>, ApiError> {
     let q = ListGamesQuery {
         limit: p.limit.unwrap_or(50),
         finished_only: p.finished.unwrap_or(false),
     };
-    let games = state.storage.list_games(q).await?;
+    let games = state.storage.list_games_for_user(user.id, q).await?;
     Ok(Json(ListResp { games }))
 }
 
 pub async fn get_game(
     State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<GameDetail>, ApiError> {
     let id = Uuid::parse_str(&id).map_err(|_| ApiError::NotFound)?;
-    let Some(game) = state.storage.get_game(id).await? else {
+    // Returns None for games the user wasn't a player in — surface as 404 so
+    // we don't leak existence to non-participants.
+    let Some(game) = state.storage.get_game_for_user(user.id, id).await? else {
         return Err(ApiError::NotFound);
     };
     let moves = state.storage.list_moves(id).await?;
@@ -58,9 +65,13 @@ pub async fn get_game(
 
 pub async fn get_moves(
     State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
 ) -> Result<Json<Vec<MoveRecord>>, ApiError> {
     let id = Uuid::parse_str(&id).map_err(|_| ApiError::NotFound)?;
+    if state.storage.get_game_for_user(user.id, id).await?.is_none() {
+        return Err(ApiError::NotFound);
+    }
     let moves = state.storage.list_moves(id).await?;
     Ok(Json(moves))
 }

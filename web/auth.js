@@ -17,11 +17,16 @@ function renderLoggedIn(user) {
   $("auth-username").textContent = user.username;
   const letter = (user.username || "?").trim().charAt(0).toUpperCase() || "·";
   $("auth-avatar-letter").textContent = letter;
+  // History is per-user, so it's only meaningful when signed in.
+  const navHistory = $("nav-history");
+  if (navHistory) navHistory.hidden = false;
 }
 
 function renderLoggedOut() {
   $("auth-loggedin").hidden = true;
   $("auth-loggedout").hidden = false;
+  const navHistory = $("nav-history");
+  if (navHistory) navHistory.hidden = true;
   closeMenu();
 }
 

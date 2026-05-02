@@ -159,10 +159,10 @@ impl Storage for SqliteStorage {
     }
 
     async fn get_game(&self, game_id: Uuid) -> Result<Option<GameRecord>> {
-        let row = sqlx::query(
-            "SELECT id, room_code, started_at, finished_at, result, termination
-             FROM games WHERE id = ?",
-        )
+        let row = sqlx::query(LIST_GAMES_BASE_SQL.replace(
+            "{WHERE}",
+            "WHERE g.id = ? ORDER BY g.started_at DESC LIMIT 1",
+        ).as_str())
         .bind(game_id.to_string())
         .fetch_optional(&self.pool)
         .await?;
@@ -171,24 +171,61 @@ impl Storage for SqliteStorage {
 
     async fn list_games(&self, q: ListGamesQuery) -> Result<Vec<GameRecord>> {
         let limit = q.limit.clamp(1, 500) as i64;
-        let rows = if q.finished_only {
-            sqlx::query(
-                "SELECT id, room_code, started_at, finished_at, result, termination
-                 FROM games WHERE finished_at IS NOT NULL
-                 ORDER BY started_at DESC LIMIT ?",
-            )
-            .bind(limit)
-            .fetch_all(&self.pool)
-            .await?
+        let where_clause = if q.finished_only {
+            "WHERE g.finished_at IS NOT NULL ORDER BY g.started_at DESC LIMIT ?"
         } else {
-            sqlx::query(
-                "SELECT id, room_code, started_at, finished_at, result, termination
-                 FROM games ORDER BY started_at DESC LIMIT ?",
-            )
+            "ORDER BY g.started_at DESC LIMIT ?"
+        };
+        let sql = LIST_GAMES_BASE_SQL.replace("{WHERE}", where_clause);
+        let rows = sqlx::query(&sql)
             .bind(limit)
             .fetch_all(&self.pool)
-            .await?
+            .await?;
+        rows.into_iter().map(row_to_game).collect()
+    }
+
+    async fn get_game_for_user(
+        &self,
+        user_id: Uuid,
+        game_id: Uuid,
+    ) -> Result<Option<GameRecord>> {
+        let sql = LIST_GAMES_BASE_SQL.replace(
+            "{WHERE}",
+            "WHERE g.id = ? AND (g.red_user_id = ? OR g.black_user_id = ?)
+             ORDER BY g.started_at DESC LIMIT 1",
+        );
+        let uid = user_id.to_string();
+        let row = sqlx::query(&sql)
+            .bind(game_id.to_string())
+            .bind(&uid)
+            .bind(&uid)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(row_to_game).transpose()?)
+    }
+
+    async fn list_games_for_user(
+        &self,
+        user_id: Uuid,
+        q: ListGamesQuery,
+    ) -> Result<Vec<GameRecord>> {
+        let limit = q.limit.clamp(1, 500) as i64;
+        let where_clause = if q.finished_only {
+            "WHERE (g.red_user_id = ? OR g.black_user_id = ?)
+                AND g.finished_at IS NOT NULL
+             ORDER BY g.started_at DESC LIMIT ?"
+        } else {
+            "WHERE (g.red_user_id = ? OR g.black_user_id = ?)
+             ORDER BY g.started_at DESC LIMIT ?"
         };
+        let sql = LIST_GAMES_BASE_SQL.replace("{WHERE}", where_clause);
+        let uid = user_id.to_string();
+        let rows = sqlx::query(&sql)
+            .bind(&uid)
+            .bind(&uid)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?;
         rows.into_iter().map(row_to_game).collect()
     }
 
@@ -426,6 +463,16 @@ const SQL_USER_SELECT_BY_ID: &str =
             oauth_provider, oauth_subject, created_at
      FROM users WHERE id = ?";
 
+// Shared base for game listing/lookup. `{WHERE}` is replaced at call site
+// with the filter + ordering + limit clauses.
+const LIST_GAMES_BASE_SQL: &str =
+    "SELECT g.id, g.room_code, g.started_at, g.finished_at, g.result, g.termination,
+            r.username AS red_username, b.username AS black_username
+     FROM games g
+     LEFT JOIN users r ON g.red_user_id = r.id
+     LEFT JOIN users b ON g.black_user_id = b.id
+     {WHERE}";
+
 fn row_to_game(r: SqliteRow) -> Result<GameRecord> {
     let id_text: String = r.try_get("id")?;
     let id = Uuid::parse_str(&id_text).map_err(|_| sqlx::Error::Decode("uuid parse".into()))?;
@@ -436,6 +483,8 @@ fn row_to_game(r: SqliteRow) -> Result<GameRecord> {
         finished_at: r.try_get::<Option<DateTime<Utc>>, _>("finished_at")?,
         result: r.try_get("result")?,
         termination: r.try_get("termination")?,
+        red_player: r.try_get("red_username").ok(),
+        black_player: r.try_get("black_username").ok(),
     })
 }
 

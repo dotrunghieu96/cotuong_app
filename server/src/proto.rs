@@ -20,6 +20,10 @@ pub enum ClientMsg {
     Move { from: u8, to: u8 },
     #[serde(rename = "resign")]
     Resign,
+    #[serde(rename = "rematch")]
+    Rematch,
+    #[serde(rename = "rematch_cancel")]
+    RematchCancel,
     #[serde(rename = "ping")]
     Ping,
 }
@@ -37,6 +41,7 @@ pub enum ServerMsg {
         status: String,
         in_check: bool,
         seats: SeatsPayload,
+        scoreboard: Vec<ScoreEntry>,
     },
     #[serde(rename = "move")]
     Move {
@@ -53,6 +58,10 @@ pub enum ServerMsg {
     OpponentLeft,
     #[serde(rename = "seats")]
     Seats { seats: SeatsPayload },
+    #[serde(rename = "scoreboard")]
+    Scoreboard { scoreboard: Vec<ScoreEntry> },
+    #[serde(rename = "rematch_pending")]
+    RematchPending { red_ready: bool, black_ready: bool },
     #[serde(rename = "game_over")]
     GameOver { winner: String, reason: String },
     #[serde(rename = "error")]
@@ -78,4 +87,11 @@ pub struct SeatPayload {
 pub struct SeatsPayload {
     pub red: Option<SeatPayload>,
     pub black: Option<SeatPayload>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ScoreEntry {
+    pub name: String,
+    pub kind: &'static str,
+    pub wins: u32,
 }

@@ -6,11 +6,15 @@ import landing  from "./screens/landing.js";
 import room     from "./screens/room.js";
 import login    from "./screens/login.js";
 import register from "./screens/register.js";
+import history  from "./screens/history.js";
+import replay   from "./screens/replay.js";
 
 router.register("/",            landing);
 router.register("/login",       login);
 router.register("/register",    register);
 router.register("/room/:code",  room);
+router.register("/history",     history);
+router.register("/replay/:id",  replay);
 
 (async function bootstrap() {
   // Load wasm engine once; screens construct Game instances after this.

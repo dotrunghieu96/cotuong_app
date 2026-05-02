@@ -66,10 +66,18 @@ export default {
             </div>
           </div>
 
+          <div class="panel scoreboard-panel" id="scoreboard-panel" hidden>
+            <div class="panel-title" data-i18n="scoreboard_title">Scoreboard</div>
+            <div class="scoreboard" id="scoreboard"></div>
+          </div>
+
           <div class="controls">
             <button class="btn btn-destructive" id="resign" data-i18n="online_resign"></button>
             <button class="btn btn-outline" id="leave" data-i18n="online_leave"></button>
           </div>
+
+          <button class="btn btn-primary btn-block" id="rematch" data-i18n="rematch_btn" hidden>Rematch</button>
+          <div class="rematch-hint text-xs text-muted" id="rematch-hint" hidden></div>
 
           <div class="panel move-panel">
             <div class="panel-title" data-i18n="move_list_title">Moves</div>
@@ -92,6 +100,9 @@ export default {
     let selectedSquare = null;
     let legalDestForSel = [];
     let seats = { red: null, black: null }; // { name, kind } per side
+    let scoreboard = [];      // [{ name, kind, wins }, ...] in seat order
+    let myRematchReady = false;
+    let oppRematchReady = false;
     const moveHistory = [];   // [{from, to}] — enables replay recovery on desync
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
@@ -109,11 +120,62 @@ export default {
     const $msg           = root.querySelector("#online-msg");
     const $copyLink      = root.querySelector("#copy-link");
     const $moveList      = root.querySelector("#move-list");
+    const $scoreboard    = root.querySelector("#scoreboard");
+    const $scoreboardPanel = root.querySelector("#scoreboard-panel");
+    const $rematch       = root.querySelector("#rematch");
+    const $rematchHint   = root.querySelector("#rematch-hint");
 
     // Square index 0..89 → UCI "h2" notation. Files a-i (col 0..8), ranks 0-9
     // from Red's bottom (rank = 9 - row).
     const squareToUci = (sq) =>
       String.fromCharCode("a".charCodeAt(0) + (sq % 9)) + (9 - Math.floor(sq / 9));
+
+    function renderScoreboard() {
+      // Only meaningful once both seats are filled (head-to-head tally).
+      if (!scoreboard || scoreboard.length < 2) {
+        $scoreboardPanel.hidden = true;
+        $scoreboard.innerHTML = "";
+        return;
+      }
+      $scoreboardPanel.hidden = false;
+      $scoreboard.innerHTML = scoreboard.map((s) => `
+        <div class="score-row">
+          <span class="score-name">${esc(s.name)}</span>
+          <span class="score-wins">${s.wins}</span>
+        </div>
+      `).join("");
+    }
+
+    function renderRematchUi() {
+      // The rematch button only makes sense when the game has ended and the
+      // opponent is still around to play another. Hide it otherwise.
+      const canRematch = gameOver && opponentPresent;
+      $rematch.hidden = !canRematch;
+      $rematchHint.hidden = !canRematch || (!myRematchReady && !oppRematchReady);
+      if (!canRematch) return;
+
+      if (myRematchReady) {
+        $rematch.dataset.i18n = "rematch_cancel";
+        $rematch.textContent  = t("rematch_cancel");
+        $rematch.classList.remove("btn-primary");
+        $rematch.classList.add("btn-outline");
+        $rematchHint.textContent = t("rematch_pending_self");
+      } else {
+        $rematch.dataset.i18n = "rematch_btn";
+        $rematch.textContent  = t("rematch_btn");
+        $rematch.classList.remove("btn-outline");
+        $rematch.classList.add("btn-primary");
+        $rematchHint.textContent = oppRematchReady ? t("rematch_pending_opp") : "";
+      }
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
 
     function renderMoveList() {
       // Two columns per row (Red move + Black move). Highlight the latest.
@@ -313,8 +375,13 @@ export default {
         case "joined":
           myColor = msg.color;
           seats = msg.seats || { red: null, black: null };
+          scoreboard = msg.scoreboard || scoreboard;
           opponentPresent = !!(myColor === "red" ? seats.black : seats.red);
           gameOver = msg.status !== "playing";
+          // Rematch may flip color and re-issue Joined — treat any joined as
+          // a fresh game (board, history, rematch flags reset).
+          myRematchReady = false;
+          oppRematchReady = false;
           // Redirect URL to the real code now that we know it (create flow)
           if (msg.room !== roomCode) {
             history.replaceState(null, "", `#/room/${msg.room}`);
@@ -325,21 +392,41 @@ export default {
           clearSelection();
           rerender();
           renderMoveList();
+          renderScoreboard();
           updateRoomUI();
+          renderRematchUi();
           break;
         case "opponent_joined":
           opponentPresent = true;
           updateRoomUI();
+          renderRematchUi();
           break;
         case "opponent_left":
           opponentPresent = false;
+          oppRematchReady = false;
           setMsg(t("online_opp_left_msg"));
           updateRoomUI();
+          renderRematchUi();
           break;
         case "seats":
           seats = msg.seats || { red: null, black: null };
           opponentPresent = !!(myColor === "red" ? seats.black : seats.red);
           updateRoomUI();
+          renderRematchUi();
+          break;
+        case "scoreboard":
+          scoreboard = msg.scoreboard || [];
+          renderScoreboard();
+          break;
+        case "rematch_pending":
+          if (myColor === "red") {
+            myRematchReady  = !!msg.red_ready;
+            oppRematchReady = !!msg.black_ready;
+          } else if (myColor === "black") {
+            myRematchReady  = !!msg.black_ready;
+            oppRematchReady = !!msg.red_ready;
+          }
+          renderRematchUi();
           break;
         case "move": {
           const ok = applyMove(msg.from, msg.to);
@@ -359,6 +446,7 @@ export default {
             setMsg(iWon ? t("online_opp_resigned") : t("online_resigned"));
           }
           updateRoomUI();
+          renderRematchUi();
           break;
         case "error":
           console.warn("[cotuong] server error:", msg.reason);
@@ -383,6 +471,15 @@ export default {
     });
 
     $leave.addEventListener("click", () => router.go("/"));
+
+    $rematch.addEventListener("click", () => {
+      if (!ws || !gameOver || !opponentPresent) return;
+      ws.send(JSON.stringify({ t: myRematchReady ? "rematch_cancel" : "rematch" }));
+      // Optimistic flip; the authoritative state arrives via rematch_pending
+      // (or via a fresh joined when both sides have agreed).
+      myRematchReady = !myRematchReady;
+      renderRematchUi();
+    });
 
     $copyLink.addEventListener("click", () => {
       const code = root.querySelector("#room-code-display").textContent;

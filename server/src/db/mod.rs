@@ -73,6 +73,9 @@ pub struct GameRecord {
     pub finished_at: Option<DateTime<Utc>>,
     pub result: Option<String>,
     pub termination: Option<String>,
+    /// Username of the red-side player at game time, if attributed (logged in).
+    pub red_player: Option<String>,
+    pub black_player: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -178,6 +181,18 @@ pub trait Storage: Send + Sync + 'static {
 
     async fn get_game(&self, game_id: Uuid) -> Result<Option<GameRecord>>;
     async fn list_games(&self, q: ListGamesQuery) -> Result<Vec<GameRecord>>;
+    /// List games where `user_id` was either the red or black player.
+    async fn list_games_for_user(
+        &self,
+        user_id: Uuid,
+        q: ListGamesQuery,
+    ) -> Result<Vec<GameRecord>>;
+    /// Fetch the game only if `user_id` was one of the two players.
+    async fn get_game_for_user(
+        &self,
+        user_id: Uuid,
+        game_id: Uuid,
+    ) -> Result<Option<GameRecord>>;
     async fn list_moves(&self, game_id: Uuid) -> Result<Vec<MoveRecord>>;
 
     // ---- Users ------------------------------------------------------------
