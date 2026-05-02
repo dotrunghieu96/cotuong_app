@@ -203,6 +203,113 @@ html, body {
   margin-top: 4px;
 }
 
+.online {
+  background: #20242b;
+  border: 1px solid #2c333d;
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.online legend {
+  padding: 0 4px;
+  color: #9aa0a6;
+  font-size: 13px;
+}
+
+.online .online-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.online button {
+  background: #2c333d;
+  color: #e8e8e8;
+  border: 1px solid #3a4250;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.online button:hover {
+  background: #3a4250;
+}
+
+.online button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.online-join-row {
+  display: flex;
+  gap: 6px;
+}
+
+.online-join-row input {
+  flex: 1;
+  background: #15181c;
+  color: #e8e8e8;
+  border: 1px solid #3a4250;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.online-line {
+  font-size: 13px;
+  color: #c8ccd2;
+}
+
+.online-line code {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  background: #15181c;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #f1d9a3;
+}
+
+.online-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.online-buttons button {
+  flex: 1;
+}
+
+.online-msg {
+  font-size: 12px;
+  color: #f6c23e;
+  min-height: 1em;
+}
+
+.online-msg.empty {
+  display: none;
+}
+
+/* When in online mode, the local mode controls fade out. */
+.ai.locked label,
+.ai.locked .depth-row,
+.ai.locked #ai-now {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.ai.locked label[data-mode-online] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .footer-help {
   font-size: 12px;
   color: #9aa0a6;

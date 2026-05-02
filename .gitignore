@@ -1,4 +1,5 @@
-# Rust build output
+# Rust build output (workspace target moved to root after server crate added)
+target/
 engine/target/
 
 # Generated wasm-bindgen bindings (run ./build.sh to regenerate)

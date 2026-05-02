@@ -11,13 +11,15 @@ if ! command -v wasm-bindgen >/dev/null 2>&1; then
   exit 1
 fi
 
-cd "$ROOT/engine"
-cargo build --release --target wasm32-unknown-unknown
+cd "$ROOT"
+cargo build --release --target wasm32-unknown-unknown -p cotuong_engine
 
 wasm-bindgen \
   --target web \
   --out-dir "$ROOT/web/pkg" \
-  "$ROOT/engine/target/wasm32-unknown-unknown/release/cotuong_engine.wasm"
+  "$ROOT/target/wasm32-unknown-unknown/release/cotuong_engine.wasm"
 
-echo "Built. Open web/index.html via a static server, e.g.:"
+echo "Built. Run the multiplayer server with:"
+echo "  cargo run --release -p cotuong_server"
+echo "or serve statically (no online play) with:"
 echo "  python3 -m http.server -d $ROOT/web 8000"

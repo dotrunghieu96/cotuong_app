@@ -28,6 +28,28 @@ const STRINGS = {
     mode_ai_red: "AI plays Red",
     ai_depth: "AI depth",
     ai_now: "AI move now",
+    mode_online: "Online (room)",
+    online_legend: "Online",
+    online_create: "Create room",
+    online_join: "Join",
+    online_room: "Room",
+    online_you_play: "You play as",
+    online_opponent: "Opponent",
+    online_resign: "Resign",
+    online_leave: "Leave",
+    online_color_red: "Red",
+    online_color_black: "Black",
+    online_opp_waiting: "waiting…",
+    online_opp_present: "connected",
+    online_opp_left: "left",
+    online_connecting: "Connecting…",
+    online_connected: "Connected.",
+    online_disconnected: "Disconnected.",
+    online_room_full: "Room is full.",
+    online_room_not_found: "Room not found.",
+    online_resigned: "You resigned.",
+    online_opp_resigned: "Opponent resigned.",
+    online_opp_left_msg: "Opponent left the room.",
     help:
       "Click a piece, then click a highlighted square to move. Red moves first. " +
       "The flying-general rule, blocked horse legs, cannon-screen captures and " +
@@ -49,6 +71,28 @@ const STRINGS = {
     mode_ai_red: "Máy cầm Đỏ",
     ai_depth: "Độ sâu của máy",
     ai_now: "Máy đi ngay",
+    mode_online: "Trực tuyến (phòng)",
+    online_legend: "Trực tuyến",
+    online_create: "Tạo phòng",
+    online_join: "Vào phòng",
+    online_room: "Phòng",
+    online_you_play: "Bạn cầm",
+    online_opponent: "Đối thủ",
+    online_resign: "Xin thua",
+    online_leave: "Rời phòng",
+    online_color_red: "Đỏ",
+    online_color_black: "Đen",
+    online_opp_waiting: "đang chờ…",
+    online_opp_present: "đã sẵn sàng",
+    online_opp_left: "đã rời",
+    online_connecting: "Đang kết nối…",
+    online_connected: "Đã kết nối.",
+    online_disconnected: "Mất kết nối.",
+    online_room_full: "Phòng đã đầy.",
+    online_room_not_found: "Không tìm thấy phòng.",
+    online_resigned: "Bạn đã xin thua.",
+    online_opp_resigned: "Đối thủ đã xin thua.",
+    online_opp_left_msg: "Đối thủ đã rời phòng.",
     help:
       "Chọn một quân, rồi bấm vào ô được tô sáng để di chuyển. Đỏ đi trước. " +
       "Luật tướng đối mặt, cản chân ngựa, pháo cần ngòi và lính qua sông đều " +
@@ -77,7 +121,7 @@ const ANIM_MS = 220;
 let game = null;
 let selectedSquare = null;
 let legalDestForSel = [];
-let mode = "ai-black"; // "hh" | "ai-black" | "ai-red"
+let mode = "ai-black"; // "hh" | "ai-black" | "ai-red" | "online"
 let aiDepth = 3;
 let aiThinking = false;
 // Identifies the last move we've already animated so re-renders triggered
@@ -86,6 +130,13 @@ let lastMoveAnimKey = null;
 function lastMoveKey(mv) {
   return mv ? `${mv.from}-${mv.to}` : null;
 }
+
+// Online state
+let onlineWs = null;
+let onlineColor = null; // "red" | "black"
+let onlineRoom = null;
+let onlineOpponentPresent = false;
+let onlineGameOver = false;
 
 const $board = document.getElementById("board");
 const $turnText = document.getElementById("turn-text");
@@ -97,6 +148,20 @@ const $undo = document.getElementById("undo");
 const $aiNow = document.getElementById("ai-now");
 const $depth = document.getElementById("depth");
 const $depthVal = document.getElementById("depth-val");
+const $depthRow = document.getElementById("depth-row");
+const $aiFieldset = document.querySelector("fieldset.ai");
+const $onlinePanel = document.getElementById("online-panel");
+const $onlineDisconnected = document.getElementById("online-disconnected");
+const $onlineConnected = document.getElementById("online-connected");
+const $onlineCreate = document.getElementById("online-create");
+const $onlineJoin = document.getElementById("online-join");
+const $onlineCode = document.getElementById("online-code");
+const $onlineRoomCode = document.getElementById("online-room-code");
+const $onlineColor = document.getElementById("online-color");
+const $onlineOpponentState = document.getElementById("online-opponent-state");
+const $onlineResign = document.getElementById("online-resign");
+const $onlineLeave = document.getElementById("online-leave");
+const $onlineMsg = document.getElementById("online-msg");
 
 function squareCenter(sq) {
   const row = Math.floor(sq / 9);
@@ -312,18 +377,28 @@ function rerenderDynamic() {
   }
 }
 
+function humanCanMove() {
+  const turn = game.turn();
+  if (mode === "online") {
+    if (!onlineWs || onlineGameOver) return false;
+    if (!onlineOpponentPresent) return false;
+    return (
+      (turn === 0 && onlineColor === "red") ||
+      (turn === 1 && onlineColor === "black")
+    );
+  }
+  if (mode === "hh") return true;
+  if (mode === "ai-red") return turn === 1; // human is Black
+  if (mode === "ai-black") return turn === 0; // human is Red
+  return false;
+}
+
 function onPieceClick(s) {
   if (aiThinking) return;
   if (game.status() !== "playing") return;
+  if (!humanCanMove()) return;
 
   const turn = game.turn();
-  const humanIsRed = mode !== "ai-red";
-  const humanIsBlack = mode !== "ai-black";
-  const humanTurn =
-    mode === "hh" ||
-    (turn === 0 && humanIsRed) ||
-    (turn === 1 && humanIsBlack);
-  if (!humanTurn) return;
 
   const boardArr = JSON.parse(game.board_json());
   const code = boardArr[s];
@@ -357,6 +432,16 @@ function onDestClick(s) {
   if (aiThinking) return;
   if (selectedSquare === null) return;
   if (!legalDestForSel.includes(s)) return;
+
+  if (mode === "online") {
+    // Send to server; the server broadcasts back and we apply on receipt.
+    if (!onlineWs || onlineWs.readyState !== WebSocket.OPEN) return;
+    onlineWs.send(JSON.stringify({ t: "move", from: selectedSquare, to: s }));
+    clearSelection();
+    rerenderDynamic();
+    return;
+  }
+
   const ok = game.play_move(selectedSquare, s);
   clearSelection();
   rerenderDynamic();
@@ -370,6 +455,7 @@ function clearSelection() {
 }
 
 function maybeAIMove() {
+  if (mode === "online") return;
   if (game.status() !== "playing") return;
   const turn = game.turn();
   const aiTurn =
@@ -396,14 +482,17 @@ function runAI() {
 }
 
 $newGame.addEventListener("click", () => {
+  if (mode === "online") return; // online resets only on rematch / new room
   game.reset();
   clearSelection();
+  lastMoveAnimKey = null;
   rerenderDynamic();
   maybeAIMove();
 });
 
 $undo.addEventListener("click", () => {
   if (aiThinking) return;
+  if (mode === "online") return; // server has no undo
   const ai = mode === "ai-black" || mode === "ai-red";
   game.undo();
   if (ai) game.undo();
@@ -413,13 +502,33 @@ $undo.addEventListener("click", () => {
   rerenderDynamic();
 });
 
-$aiNow.addEventListener("click", () => runAI());
+$aiNow.addEventListener("click", () => {
+  if (mode === "online") return;
+  runAI();
+});
 
 document.querySelectorAll('input[name="mode"]').forEach((el) => {
   el.addEventListener("change", () => {
-    if (el.checked) {
-      mode = el.value;
+    if (!el.checked) return;
+    const prevMode = mode;
+    mode = el.value;
+    if (prevMode === "online" && mode !== "online") {
+      // Switching out of online: drop the WS.
+      disconnectOnline();
+    }
+    applyModeUI();
+    if (mode !== "online") {
+      // Reset the local game state for a clean local game.
+      game.reset();
+      clearSelection();
+      lastMoveAnimKey = null;
+      rerenderDynamic();
       maybeAIMove();
+    } else {
+      // Entering online mode: clear any stale local state, wait for user
+      // to click Create / Join.
+      clearSelection();
+      rerenderDynamic();
     }
   });
 });
@@ -436,6 +545,193 @@ $board.addEventListener("click", (e) => {
   }
 });
 
+// ----- Online play -----------------------------------------------------------
+
+function applyModeUI() {
+  const online = mode === "online";
+  $onlinePanel.hidden = !online;
+  $aiFieldset.classList.toggle("locked", online);
+  // Hide AI-only controls when online.
+  $depthRow.style.display = online ? "none" : "";
+  $aiNow.style.display = online ? "none" : "";
+  $undo.disabled = online;
+  $newGame.disabled = online;
+  if (!online) {
+    setOnlineMsg("");
+  }
+}
+
+function setOnlineMsg(msg) {
+  $onlineMsg.textContent = msg || "";
+  $onlineMsg.classList.toggle("empty", !msg);
+}
+
+function setOnlineConnectedUI(connected) {
+  $onlineDisconnected.hidden = connected;
+  $onlineConnected.hidden = !connected;
+}
+
+function updateOnlineStatusUI() {
+  if (!onlineWs) {
+    setOnlineConnectedUI(false);
+    return;
+  }
+  setOnlineConnectedUI(true);
+  $onlineRoomCode.textContent = onlineRoom || "—";
+  $onlineColor.textContent =
+    onlineColor === "red" ? t("online_color_red") :
+    onlineColor === "black" ? t("online_color_black") : "—";
+  if (onlineGameOver) {
+    // Leave the message field as set by the game-over handler.
+  } else if (!onlineOpponentPresent) {
+    $onlineOpponentState.textContent = t("online_opp_waiting");
+  } else {
+    $onlineOpponentState.textContent = t("online_opp_present");
+  }
+}
+
+function wsUrl() {
+  const u = new URL("/ws", window.location.href);
+  u.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return u.toString();
+}
+
+function connectOnline(onOpen) {
+  if (onlineWs) {
+    try { onlineWs.close(); } catch (_) {}
+    onlineWs = null;
+  }
+  onlineColor = null;
+  onlineRoom = null;
+  onlineOpponentPresent = false;
+  onlineGameOver = false;
+  setOnlineMsg(t("online_connecting"));
+
+  let ws;
+  try {
+    ws = new WebSocket(wsUrl());
+  } catch (e) {
+    setOnlineMsg(String(e));
+    return;
+  }
+  onlineWs = ws;
+
+  ws.addEventListener("open", () => {
+    setOnlineMsg("");
+    onOpen(ws);
+  });
+  ws.addEventListener("message", (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); }
+    catch (_) { return; }
+    handleServerMessage(msg);
+  });
+  ws.addEventListener("close", () => {
+    if (onlineWs === ws) {
+      onlineWs = null;
+      onlineColor = null;
+      onlineRoom = null;
+      onlineOpponentPresent = false;
+      setOnlineConnectedUI(false);
+      setOnlineMsg(t("online_disconnected"));
+    }
+  });
+  ws.addEventListener("error", () => {
+    setOnlineMsg(t("online_disconnected"));
+  });
+}
+
+function handleServerMessage(msg) {
+  switch (msg.t) {
+    case "joined":
+      onlineRoom = msg.room;
+      onlineColor = msg.color;
+      onlineOpponentPresent = !!msg.opponent_present;
+      onlineGameOver = msg.status !== "playing";
+      // Server-authoritative: replay from a fresh game then catch up. For
+      // the scaffolding, fresh rooms always start at the initial position
+      // so just reset.
+      game.reset();
+      clearSelection();
+      lastMoveAnimKey = null;
+      rerenderDynamic();
+      updateOnlineStatusUI();
+      break;
+    case "opponent_joined":
+      onlineOpponentPresent = true;
+      updateOnlineStatusUI();
+      break;
+    case "opponent_left":
+      onlineOpponentPresent = false;
+      setOnlineMsg(t("online_opp_left_msg"));
+      updateOnlineStatusUI();
+      break;
+    case "move": {
+      const ok = game.play_move(msg.from, msg.to);
+      if (!ok) {
+        console.error("desync: server move not legal locally", msg);
+      }
+      clearSelection();
+      rerenderDynamic();
+      if (msg.status !== "playing") onlineGameOver = true;
+      break;
+    }
+    case "game_over":
+      onlineGameOver = true;
+      if (msg.reason === "resignation") {
+        const iWon = msg.winner === onlineColor;
+        setOnlineMsg(iWon ? t("online_opp_resigned") : t("online_resigned"));
+      }
+      updateOnlineStatusUI();
+      break;
+    case "error":
+      setOnlineMsg(msg.reason || "error");
+      if (msg.reason === "room not found") setOnlineMsg(t("online_room_not_found"));
+      if (msg.reason === "room full") setOnlineMsg(t("online_room_full"));
+      break;
+    case "pong":
+      break;
+    default:
+      // ignore
+  }
+}
+
+function disconnectOnline() {
+  if (onlineWs) {
+    try { onlineWs.close(); } catch (_) {}
+    onlineWs = null;
+  }
+  onlineColor = null;
+  onlineRoom = null;
+  onlineOpponentPresent = false;
+  onlineGameOver = false;
+  setOnlineConnectedUI(false);
+  setOnlineMsg("");
+}
+
+$onlineCreate.addEventListener("click", () => {
+  connectOnline((ws) => ws.send(JSON.stringify({ t: "create" })));
+});
+
+$onlineJoin.addEventListener("click", () => {
+  const code = ($onlineCode.value || "").trim().toUpperCase();
+  if (!code) return;
+  connectOnline((ws) => ws.send(JSON.stringify({ t: "join", room: code })));
+});
+
+$onlineCode.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $onlineJoin.click();
+});
+
+$onlineResign.addEventListener("click", () => {
+  if (!onlineWs || onlineGameOver) return;
+  onlineWs.send(JSON.stringify({ t: "resign" }));
+});
+
+$onlineLeave.addEventListener("click", () => {
+  disconnectOnline();
+});
+
 function applyLang() {
   document.documentElement.lang = lang;
   document.title = t("title");
@@ -446,6 +742,7 @@ function applyLang() {
     btn.classList.toggle("active", btn.dataset.lang === lang);
   }
   if (game) rerenderDynamic();
+  updateOnlineStatusUI();
 }
 
 document.querySelectorAll("#lang-switch button").forEach((btn) => {
@@ -460,6 +757,7 @@ document.querySelectorAll("#lang-switch button").forEach((btn) => {
 
 (async function start() {
   applyLang();
+  applyModeUI();
   await init();
   game = new Game();
   buildStaticBoard();

@@ -65,6 +65,28 @@ impl Piece {
 pub const FILES: i32 = 9;
 pub const RANKS: i32 = 10;
 
+/// Serialize a board to a JSON array of 90 entries (each `null` or a piece
+/// code string like `"rR"` / `"bP"`).
+pub fn board_to_json(b: &Board) -> String {
+    let mut s = String::with_capacity(512);
+    s.push('[');
+    for i in 0..90 {
+        if i > 0 {
+            s.push(',');
+        }
+        match b.squares[i] {
+            None => s.push_str("null"),
+            Some(p) => {
+                s.push('"');
+                s.push_str(p.code());
+                s.push('"');
+            }
+        }
+    }
+    s.push(']');
+    s
+}
+
 #[inline]
 pub fn sq(row: i32, col: i32) -> usize {
     (row * FILES + col) as usize
