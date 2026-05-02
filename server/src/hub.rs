@@ -1,6 +1,11 @@
 // In-memory hub mapping room codes to live games and WS senders.
 // Each connected WebSocket runs `handle_session`; it owns a per-session
 // outbound queue and parks on the inbound stream.
+//
+// Persistence is write-through via `Arc<dyn Storage>`: a `games` row is
+// inserted at room creation, a `moves` row per legal move, and
+// `finish_game` runs on checkmate / resignation / abandonment. Storage
+// failures are logged but never abort live play.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,21 +16,41 @@ use futures_util::{SinkExt, StreamExt};
 use rand::Rng;
 use serde_json::Value;
 use tokio::sync::{mpsc, Mutex};
+use uuid::Uuid;
 
-use crate::proto::{ClientMsg, ServerMsg};
+use crate::db::{GameResult, Storage, Termination, UserRecord};
+use crate::proto::{ClientMsg, SeatPayload, SeatsPayload, ServerMsg};
 use crate::room::{GameRoom, MoveError};
+
+const GUEST_NAME_MAX: usize = 30;
+
+/// Trim, drop control chars, cap length. Returns None for an empty result.
+fn sanitize_guest_name(raw: Option<String>) -> Option<String> {
+    let s = raw?.trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    let cleaned: String = s
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(GUEST_NAME_MAX)
+        .collect();
+    if cleaned.is_empty() { None } else { Some(cleaned) }
+}
 
 const ROOM_CODE_CHARS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ROOM_CODE_LEN: usize = 6;
 
 pub struct Hub {
     rooms: Mutex<HashMap<String, Arc<Mutex<RoomEntry>>>>,
+    storage: Arc<dyn Storage>,
 }
 
 impl Hub {
-    pub fn new() -> Self {
+    pub fn new(storage: Arc<dyn Storage>) -> Self {
         Self {
             rooms: Mutex::new(HashMap::new()),
+            storage,
         }
     }
 }
@@ -34,10 +59,30 @@ struct RoomEntry {
     game: GameRoom,
     /// seats[0] = Red, seats[1] = Black.
     seats: [Option<Seat>; 2],
+    game_id: Uuid,
 }
 
 struct Seat {
     tx: mpsc::UnboundedSender<ServerMsg>,
+    name: String,
+    /// "user" for an authenticated account, "guest" for self-declared.
+    kind: &'static str,
+}
+
+impl Seat {
+    fn payload(&self) -> SeatPayload {
+        SeatPayload {
+            name: self.name.clone(),
+            kind: self.kind,
+        }
+    }
+}
+
+fn seats_payload(entry: &RoomEntry) -> SeatsPayload {
+    SeatsPayload {
+        red: entry.seats[0].as_ref().map(Seat::payload),
+        black: entry.seats[1].as_ref().map(Seat::payload),
+    }
 }
 
 fn random_code() -> String {
@@ -71,6 +116,13 @@ fn turn_byte(c: Color) -> u8 {
     }
 }
 
+fn winner_to_result(c: Color) -> GameResult {
+    match c {
+        Color::Red => GameResult::RedWins,
+        Color::Black => GameResult::BlackWins,
+    }
+}
+
 fn board_value(b: &cotuong_engine::board::Board) -> Value {
     serde_json::from_str(&board_to_json(b)).unwrap_or(Value::Null)
 }
@@ -101,7 +153,9 @@ fn current_status(entry: &mut RoomEntry) -> (&'static str, bool) {
     (status, in_check)
 }
 
-pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
+pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>, user: Option<UserRecord>) {
+    let user_id = user.as_ref().map(|u| u.id);
+    let user_name = user.as_ref().map(|u| u.username.clone());
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<ServerMsg>();
 
@@ -146,17 +200,27 @@ pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
         };
 
         match cm {
-            ClientMsg::Create => {
+            ClientMsg::Create { name } => {
                 if state.is_some() {
                     let _ = out_tx.send(ServerMsg::Error {
                         reason: "already in a room".into(),
                     });
                     continue;
                 }
-                let code = create_room(&hub).await;
-                join_room(&hub, &code, Color::Red, &out_tx, &mut state).await;
+                let display = resolve_display(user_name.as_deref(), name);
+                match create_room(&hub, user_id).await {
+                    Ok(code) => {
+                        join_room(&hub, &code, Color::Red, user_id, display, &out_tx, &mut state).await;
+                    }
+                    Err(e) => {
+                        tracing::error!("create_room failed: {e}");
+                        let _ = out_tx.send(ServerMsg::Error {
+                            reason: "server unavailable".into(),
+                        });
+                    }
+                }
             }
-            ClientMsg::Join { room } => {
+            ClientMsg::Join { room, name } => {
                 if state.is_some() {
                     let _ = out_tx.send(ServerMsg::Error {
                         reason: "already in a room".into(),
@@ -190,7 +254,8 @@ pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
                     });
                     continue;
                 };
-                join_room(&hub, &code, color, &out_tx, &mut state).await;
+                let display = resolve_display(user_name.as_deref(), name);
+                join_room(&hub, &code, color, user_id, display, &out_tx, &mut state).await;
             }
             ClientMsg::Move { from, to } => {
                 let Some((code, my_color)) = state.clone() else {
@@ -232,6 +297,11 @@ pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
                     Ok(outcome) => {
                         let board = board_value(&entry.game.board);
                         let turn = turn_byte(entry.game.board.turn);
+                        let ply = entry.game.history.len() as i32;
+                        let game_id = entry.game_id;
+                        let winner = entry.game.winner;
+                        let status_owned: String = outcome.status.into();
+
                         broadcast(
                             &entry,
                             ServerMsg::Move {
@@ -239,23 +309,41 @@ pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
                                 to,
                                 board,
                                 turn,
-                                status: outcome.status.into(),
+                                status: status_owned.clone(),
                                 in_check: outcome.in_check,
                             },
                         );
+
+                        // Persist the move. Storage errors must not break live play.
+                        if let Err(e) = hub
+                            .storage
+                            .record_move(game_id, ply, from as i32, to as i32)
+                            .await
+                        {
+                            tracing::warn!("record_move failed for {game_id}: {e}");
+                        }
+
                         if outcome.status != "playing" {
-                            let winner = match entry.game.winner {
-                                Some(Color::Red) => "red",
-                                Some(Color::Black) => "black",
-                                None => continue,
-                            };
-                            broadcast(
-                                &entry,
-                                ServerMsg::GameOver {
-                                    winner: winner.into(),
-                                    reason: "checkmate".into(),
-                                },
-                            );
+                            if let Some(w) = winner {
+                                broadcast(
+                                    &entry,
+                                    ServerMsg::GameOver {
+                                        winner: color_str(w),
+                                        reason: "checkmate".into(),
+                                    },
+                                );
+                                if let Err(e) = hub
+                                    .storage
+                                    .finish_game(
+                                        game_id,
+                                        Some(winner_to_result(w)),
+                                        Termination::Checkmate,
+                                    )
+                                    .await
+                                {
+                                    tracing::warn!("finish_game (checkmate) failed: {e}");
+                                }
+                            }
                         }
                     }
                 }
@@ -270,6 +358,7 @@ pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
                 };
                 let Some(arc_room) = arc_room else { continue };
                 let mut entry = arc_room.lock().await;
+                let game_id = entry.game_id;
                 if let Some(winner) = entry.game.resign(my_color) {
                     broadcast(
                         &entry,
@@ -278,6 +367,17 @@ pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
                             reason: "resignation".into(),
                         },
                     );
+                    if let Err(e) = hub
+                        .storage
+                        .finish_game(
+                            game_id,
+                            Some(winner_to_result(winner)),
+                            Termination::Resignation,
+                        )
+                        .await
+                    {
+                        tracing::warn!("finish_game (resignation) failed: {e}");
+                    }
                 }
             }
             ClientMsg::Ping => {
@@ -296,31 +396,50 @@ pub async fn handle_session(socket: WebSocket, hub: Arc<Hub>) {
             let mut entry = arc_room.lock().await;
             entry.seats[color_idx(my_color)] = None;
             broadcast(&entry, ServerMsg::OpponentLeft);
+            broadcast(
+                &entry,
+                ServerMsg::Seats {
+                    seats: seats_payload(&entry),
+                },
+            );
             let empty = entry.seats.iter().all(|s| s.is_none());
+            let unfinished = !entry.game.finished;
+            let game_id = entry.game_id;
             drop(entry);
             if empty {
                 hub.rooms.lock().await.remove(&code);
                 tracing::info!("room {} disposed", code);
+                if unfinished {
+                    if let Err(e) = hub
+                        .storage
+                        .finish_game(game_id, None, Termination::Abandoned)
+                        .await
+                    {
+                        tracing::warn!("finish_game (abandoned) failed: {e}");
+                    }
+                }
             }
         }
     }
     send_task.abort();
 }
 
-async fn create_room(hub: &Hub) -> String {
+async fn create_room(hub: &Hub, red_user_id: Option<Uuid>) -> crate::db::Result<String> {
     let mut rooms = hub.rooms.lock().await;
     loop {
         let code = random_code();
         if !rooms.contains_key(&code) {
+            let game_id = hub.storage.create_game(&code, red_user_id).await?;
             rooms.insert(
                 code.clone(),
                 Arc::new(Mutex::new(RoomEntry {
                     game: GameRoom::new(),
                     seats: [None, None],
+                    game_id,
                 })),
             );
-            tracing::info!("room {} created", code);
-            return code;
+            tracing::info!("room {} created (game {})", code, game_id);
+            return Ok(code);
         }
     }
 }
@@ -329,6 +448,8 @@ async fn join_room(
     hub: &Hub,
     code: &str,
     color: Color,
+    user_id: Option<Uuid>,
+    display: SeatDisplay,
     out_tx: &mpsc::UnboundedSender<ServerMsg>,
     state: &mut Option<(String, Color)>,
 ) {
@@ -352,14 +473,26 @@ async fn join_room(
     }
     entry.seats[i] = Some(Seat {
         tx: out_tx.clone(),
+        name: display.name,
+        kind: display.kind,
     });
     *state = Some((code.to_string(), color));
+
+    // Attribute the seat in the games row. Red is set at create_game time;
+    // black is filled in here when the second seat lands. Skip if anonymous.
+    if color == Color::Black {
+        if let Some(uid) = user_id {
+            if let Err(e) = hub.storage.set_black_player(entry.game_id, uid).await {
+                tracing::warn!("set_black_player failed: {e}");
+            }
+        }
+    }
 
     let board = board_value(&entry.game.board);
     let turn = turn_byte(entry.game.board.turn);
     let (status, in_check) = current_status(&mut entry);
-    let opponent_present = entry.seats[1 - i].is_some();
     let last_move = entry.game.last_move.clone();
+    let seats = seats_payload(&entry);
 
     let _ = out_tx.send(ServerMsg::Joined {
         room: code.to_string(),
@@ -369,10 +502,32 @@ async fn join_room(
         last_move,
         status: status.into(),
         in_check,
-        opponent_present,
+        seats: seats.clone(),
     });
 
     if let Some(other) = &entry.seats[1 - i] {
         let _ = other.tx.send(ServerMsg::OpponentJoined);
+        let _ = other.tx.send(ServerMsg::Seats {
+            seats: seats.clone(),
+        });
+    }
+}
+
+struct SeatDisplay {
+    name: String,
+    kind: &'static str,
+}
+
+fn resolve_display(account_name: Option<&str>, supplied_guest: Option<String>) -> SeatDisplay {
+    if let Some(account) = account_name {
+        return SeatDisplay {
+            name: account.to_string(),
+            kind: "user",
+        };
+    }
+    let guest = sanitize_guest_name(supplied_guest).unwrap_or_else(|| "Guest".to_string());
+    SeatDisplay {
+        name: guest,
+        kind: "guest",
     }
 }

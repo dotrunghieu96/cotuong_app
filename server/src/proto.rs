@@ -4,9 +4,18 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "t")]
 pub enum ClientMsg {
     #[serde(rename = "create")]
-    Create,
+    Create {
+        /// Display name for guests. Ignored for authenticated users (we use
+        /// their account username instead).
+        #[serde(default)]
+        name: Option<String>,
+    },
     #[serde(rename = "join")]
-    Join { room: String },
+    Join {
+        room: String,
+        #[serde(default)]
+        name: Option<String>,
+    },
     #[serde(rename = "move")]
     Move { from: u8, to: u8 },
     #[serde(rename = "resign")]
@@ -27,7 +36,7 @@ pub enum ServerMsg {
         last_move: Option<MovePayload>,
         status: String,
         in_check: bool,
-        opponent_present: bool,
+        seats: SeatsPayload,
     },
     #[serde(rename = "move")]
     Move {
@@ -42,6 +51,8 @@ pub enum ServerMsg {
     OpponentJoined,
     #[serde(rename = "opponent_left")]
     OpponentLeft,
+    #[serde(rename = "seats")]
+    Seats { seats: SeatsPayload },
     #[serde(rename = "game_over")]
     GameOver { winner: String, reason: String },
     #[serde(rename = "error")]
@@ -54,4 +65,17 @@ pub enum ServerMsg {
 pub struct MovePayload {
     pub from: u8,
     pub to: u8,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct SeatPayload {
+    pub name: String,
+    /// "user" for authenticated accounts, "guest" for self-declared names.
+    pub kind: &'static str,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct SeatsPayload {
+    pub red: Option<SeatPayload>,
+    pub black: Option<SeatPayload>,
 }

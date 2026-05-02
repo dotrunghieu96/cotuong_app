@@ -1,93 +1,54 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title data-i18n="title">Cờ Tướng</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div class="layout">
-      <div class="board-wrap">
-        <svg id="board" viewBox="0 0 520 576" xmlns="http://www.w3.org/2000/svg"></svg>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="title">Cờ Tướng</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="app-header">
+    <a class="brand" href="#/">
+      <span class="brand-mark">將</span>
+      <span data-i18n="title"></span>
+    </a>
+
+    <div class="header-right">
+      <button type="button" class="lang-toggle" id="lang-toggle"
+              aria-label="Toggle language">
+        <span class="lang-opt" data-lang="en">EN</span>
+        <span class="lang-sep" aria-hidden="true">/</span>
+        <span class="lang-opt" data-lang="vi">VI</span>
+      </button>
+
+      <nav class="auth-nav" id="auth-loggedout" hidden>
+        <a class="btn btn-ghost btn-sm" href="#/login" data-i18n="auth_login">Log in</a>
+        <a class="btn btn-primary btn-sm" href="#/register" data-i18n="auth_signup">Sign up</a>
+      </nav>
+
+      <div class="menu" id="auth-loggedin" hidden>
+        <button type="button" class="avatar" id="auth-avatar" aria-haspopup="menu" aria-expanded="false">
+          <span id="auth-avatar-letter">·</span>
+        </button>
+        <div class="menu-content" id="auth-menu" hidden role="menu">
+          <div class="menu-label">
+            <span data-i18n="auth_signed_in_as">Signed in as</span>
+            <strong id="auth-username">—</strong>
+          </div>
+          <div class="menu-separator"></div>
+          <button type="button" class="menu-item destructive" id="auth-logout">
+            <span data-i18n="auth_logout">Log out</span>
+          </button>
+        </div>
       </div>
-
-      <aside class="side">
-        <header class="side-header">
-          <h1 data-i18n="title">Chinese Chess</h1>
-          <div class="lang-switch" id="lang-switch">
-            <button type="button" data-lang="en">EN</button>
-            <button type="button" data-lang="vi">VI</button>
-          </div>
-        </header>
-
-        <div class="status" id="status">
-          <div class="turn-line">
-            <span class="dot" id="turn-dot"></span>
-            <span id="turn-text">Red to move</span>
-          </div>
-          <div class="check-line" id="check-line" hidden data-i18n="check">Check!</div>
-          <div class="result-line" id="result-line" hidden></div>
-        </div>
-
-        <div class="controls">
-          <button id="new-game" data-i18n="new_game">New game</button>
-          <button id="undo" data-i18n="undo">Undo</button>
-        </div>
-
-        <fieldset class="ai">
-          <legend data-i18n="opponent">Opponent</legend>
-          <label><input type="radio" name="mode" value="hh" /> <span data-i18n="mode_hh">Human vs Human</span></label>
-          <label><input type="radio" name="mode" value="ai-black" checked /> <span data-i18n="mode_ai_black">AI plays Black</span></label>
-          <label><input type="radio" name="mode" value="ai-red" /> <span data-i18n="mode_ai_red">AI plays Red</span></label>
-          <label><input type="radio" name="mode" value="online" /> <span data-i18n="mode_online">Online (room)</span></label>
-
-          <div class="depth-row" id="depth-row">
-            <label for="depth" data-i18n="ai_depth">AI depth</label>
-            <input type="range" id="depth" min="1" max="5" value="3" />
-            <span id="depth-val">3</span>
-          </div>
-          <button id="ai-now" data-i18n="ai_now">AI move now</button>
-        </fieldset>
-
-        <fieldset class="online" id="online-panel" hidden>
-          <legend data-i18n="online_legend">Online</legend>
-          <div id="online-disconnected" class="online-row">
-            <button id="online-create" data-i18n="online_create">Create room</button>
-            <div class="online-join-row">
-              <input id="online-code" placeholder="ABCDEF" maxlength="6" autocomplete="off" />
-              <button id="online-join" data-i18n="online_join">Join</button>
-            </div>
-          </div>
-          <div id="online-connected" class="online-row" hidden>
-            <div class="online-line">
-              <span data-i18n="online_room">Room</span>:
-              <code id="online-room-code">—</code>
-            </div>
-            <div class="online-line">
-              <span data-i18n="online_you_play">You play as</span>:
-              <span id="online-color">—</span>
-            </div>
-            <div class="online-line">
-              <span data-i18n="online_opponent">Opponent</span>:
-              <span id="online-opponent-state">—</span>
-            </div>
-            <div class="online-buttons">
-              <button id="online-resign" data-i18n="online_resign">Resign</button>
-              <button id="online-leave" data-i18n="online_leave">Leave</button>
-            </div>
-          </div>
-          <div class="online-msg" id="online-msg"></div>
-        </fieldset>
-
-        <div class="footer-help" data-i18n="help">
-          Click a piece, then click a highlighted square to move.
-          Red moves first. The flying-general rule, blocked horse legs,
-          cannon-screen captures and post-river soldiers are all enforced.
-        </div>
-      </aside>
     </div>
+  </header>
 
-    <script type="module" src="main.js"></script>
-  </body>
+  <main id="app"></main>
+
+  <script type="module" src="app.js"></script>
+</body>
+
 </html>

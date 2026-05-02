@@ -4,9 +4,21 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+[features]
+default = ["oauth"]
+r2-backup = ["dep:aws-config", "dep:aws-sdk-s3"]
+oauth = ["dep:oauth2", "dep:reqwest"]
+email = ["dep:lettre"]
+
 [dependencies]
 axum = { version = "0.7", features = ["ws"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync"] }
+axum-extra = { version = "0.9", features = ["cookie"] }
+argon2 = "0.5"
+sha2 = "0.10"
+hex = "0.4"
+url = "2"
+base64 = "0.22"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "fs"] }
 tower-http = { version = "0.5", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -14,5 +26,19 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
 futures-util = "0.3"
+async-trait = "0.1"
+thiserror = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+time = "0.3"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "macros", "migrate", "chrono", "uuid", "sqlite"] }
+
+aws-config = { version = "1", optional = true, features = ["behavior-version-latest"] }
+aws-sdk-s3 = { version = "1", optional = true, features = ["behavior-version-latest"] }
+
+oauth2 = { version = "4", optional = true, features = ["reqwest", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["rustls-tls", "json"] }
+lettre = { version = "0.11", optional = true, default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
 
 cotuong_engine = { path = "../engine" }
