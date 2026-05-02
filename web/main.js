@@ -72,12 +72,20 @@ function t(key) {
   return (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.en[key] || key;
 }
 
+const ANIM_MS = 220;
+
 let game = null;
 let selectedSquare = null;
 let legalDestForSel = [];
 let mode = "ai-black"; // "hh" | "ai-black" | "ai-red"
 let aiDepth = 3;
 let aiThinking = false;
+// Identifies the last move we've already animated so re-renders triggered
+// by selection / language changes don't replay the slide.
+let lastMoveAnimKey = null;
+function lastMoveKey(mv) {
+  return mv ? `${mv.from}-${mv.to}` : null;
+}
 
 const $board = document.getElementById("board");
 const $turnText = document.getElementById("turn-text");
@@ -214,24 +222,48 @@ function rerenderDynamic() {
     }
   }
 
-  // Pieces
+  // Pieces. Each <g> is positioned via a CSS transform translate so we can
+  // transition it. The piece that just moved starts at its `from` square and
+  // is re-targeted to its `to` square on the next animation frame, producing
+  // a slide animation. All other pieces are placed at their target directly.
+  const animatedPieces = [];
   for (let s = 0; s < 90; s++) {
     const code = boardArr[s];
     if (!code) continue;
-    const { cx, cy } = squareCenter(s);
+    const target = squareCenter(s);
+    const isMover = lastMv && s === lastMv.to && lastMoveAnimKey !== lastMoveKey(lastMv);
+    const initial = isMover ? squareCenter(lastMv.from) : target;
+
     const g = svg("g", { class: "piece-group", "data-dyn": "1", "data-square": s });
+    g.style.transform = `translate(${initial.cx}px, ${initial.cy}px)`;
     g.appendChild(svg("circle", {
-      cx, cy, r: RADIUS,
+      cx: 0, cy: 0, r: RADIUS,
       class: "piece-bg" + (selectedSquare === s ? " selected" : ""),
     }));
     const t = svg("text", {
-      x: cx, y: cy,
+      x: 0, y: 0,
       class: "piece-text " + (code[0] === "r" ? "red" : "black"),
     });
     t.textContent = PIECE_TEXT[code] || "?";
     g.appendChild(t);
     g.addEventListener("click", () => onPieceClick(s));
     $board.appendChild(g);
+
+    if (isMover) animatedPieces.push({ g, target });
+  }
+
+  if (animatedPieces.length > 0) {
+    // Force a layout flush so the initial transform is registered, then
+    // re-target on the next frame to trigger the CSS transition.
+    void $board.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      for (const { g, target } of animatedPieces) {
+        g.style.transform = `translate(${target.cx}px, ${target.cy}px)`;
+      }
+    });
+    lastMoveAnimKey = lastMoveKey(lastMv);
+  } else if (!lastMv) {
+    lastMoveAnimKey = null;
   }
 
   // Move suggestions on top
@@ -351,7 +383,8 @@ function runAI() {
   if (game.status() !== "playing") return;
   aiThinking = true;
   $turnText.textContent = t("ai_thinking");
-  // Yield so the "thinking" message paints before search blocks the thread.
+  // Wait for the prior move's animation to settle, then yield so the
+  // "thinking" message paints before search blocks the thread.
   setTimeout(() => {
     try {
       game.ai_move(aiDepth);
@@ -359,7 +392,7 @@ function runAI() {
       aiThinking = false;
       rerenderDynamic();
     }
-  }, 30);
+  }, ANIM_MS + 20);
 }
 
 $newGame.addEventListener("click", () => {
@@ -375,6 +408,8 @@ $undo.addEventListener("click", () => {
   game.undo();
   if (ai) game.undo();
   clearSelection();
+  // Don't replay the prior move's slide animation when stepping backward.
+  lastMoveAnimKey = lastMoveKey(JSON.parse(game.last_move_json()));
   rerenderDynamic();
 });
 
